@@ -1,0 +1,316 @@
+---
+title: "pmartRseq Workflow"
+author: "Allison Thompson"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+# pmartRseq
+
+This is a package developed mostly by Allison Thompson, Sarah Reehl, Lisa Bramer, Meg Pirrung, and Joe Brown, to analyze sequence data. It can be found at https://github.com/pmartR/pmartRseq and can be installed from there.
+
+```{r libraries, message=FALSE}
+library(pmartRseq)
+```
+
+# as.seqData
+
+The first step in analysis is to get the data in the pmartRseq-specified data format. To do this, use *as.seqData*. You can simply input the location of the data and metadata files and the function will do the rest. You also need to input the *data_type*, which can be "rRNA", "gDNA", or "cDNA". 
+
+```{r seqData}
+seq <- import_seqData(e_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/mead/data/OTU.biom", f_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/mead/data/QIIMEvalid_metadata_20160623_nohash.txt")
+
+mydata <- as.seqData(e_data = seq$e_data, f_data = seq$f_data, e_meta = seq$e_meta, edata_cname = seq$guessed_edata_cname, fdata_cname = seq$guessed_fdata_cname, taxa_cname = seq$guessed_taxa_cname, data_type = "rRNA")
+```
+
+Use the *summary* function to get a summary of your data - how much data is missing, the number of samples, etc.
+
+```{r data summary}
+summary(mydata)
+```
+
+# group_designation
+
+It's important to define the groups that these samples comprise. Up to two main effects can be used in this.
+
+```{r group_designation}
+mydata <- group_designation(omicsData = mydata, main_effects = c("MoistureStatus", "SoilWeight"))
+
+head(attr(mydata, "group_DF"))
+```
+
+Use the *plot* function to look at the distribution of taxa across the groups.
+
+```{r data plot}
+plot(mydata, class="taxonomy2")
+```
+
+# split_emeta
+
+It might be a good idea to use the *split_emeta* function to format the experimental metadata. For instance, this will remove the "k__" part of "k__Bacteria" in a taxonomic breakdown. First, you can use *head(mydata$e_meta)* if you want to see if this is necessary.
+
+```{r split_emeta}
+head(mydata$e_meta)
+
+mydata <- split_emeta(omicsData = mydata, cname = "OTU", split1 = NULL, numcol = 7, split2 = "__", num = 2, newnames = NULL)
+
+head(mydata$e_meta)
+```
+
+# taxa_rollup
+
+If desired, use *taxa_rollup*, to use the data at a different taxonomic level. For instance, on the "Genus", instead of "OTU", level.
+
+```{r taxa_rollup}
+mydata <- taxa_rollup(omicsData = mydata, level = "Genus", taxa_levels = NULL)
+
+summary(mydata)
+
+head(mydata$e_meta)
+```
+
+# applyFilt
+
+It's possible to want a filter applied to the data and there are many options here. Generally, it's normal to remove features that have a count of 0 across all samples (example below). It's also possible to remove features that are only seen once in one sample. 
+
+```{r filt}
+myfilt <- count_based_filter(omicsData = mydata, fn = "sum")
+plot(myfilt, min_num = 0)
+summary(myfilt, min_num = 0) # If no features will be removed with this, then do not run the next function.
+
+mydata <- applyFilt(filter_object = myfilt, omicsData = mydata, upper_lim = 0)
+```
+
+# Outliers
+
+Use *richness_calc*, *abundance_calc*, and *jaccard_calc* to look for any outliers that might be present in the data.
+
+## richness_calc
+
+Richness can be calculated using three metrics - 'observed', which is the total number of unique features (in this example, genera), that are found in the dataset, or 'chao1' or 'ace', which are richness estimators which estimates the total number of features. Samples with a very low richness might need to be thrown out or redone.
+
+```{r richness_calc}
+rich <- richness_calc(omicsData = mydata, index = c("observed", "chao1", "ace"))
+
+summary(rich)
+
+plot(rich)
+```
+
+## abundance_calc
+
+Abundance is the total sum of counts that appear in a sample. A sample with a very low number of counts might need to be thrown out or redone.
+
+```{r abundance_calc}
+abun <- abundance_calc(omicsData = mydata)
+
+summary(abun)
+
+plot(abun)
+```
+
+## jaccard_calc
+
+The Jaccard index is a beta diversity measure that can look at how similar two samples are to each other. In this instance, this can be used again to look for outliers. The Jaccard index is calculated between every sample in a group and the median value (between one sample and every other sample in a group) is calculated. If a sample is an outlier, it will have a very low index value compared to the others.
+
+```{r jaccard_calc}
+jac <- jaccard_calc(omicsData = mydata, sim = TRUE)
+
+summary(jac)
+
+plot(jac, variable = "Median")
+```
+
+# normalize_data
+
+If it looks like all samples are good to go, the next step is to normalize the data. There are multiple normalization functions available, see *?normalize_data* to view all of the options.
+
+```{r normalize_data}
+mynorm <- normalize_data(omicsData = mydata, norm_fn = "css", normalize = TRUE)
+
+plot(mynorm, class="Phylum")
+```
+
+In order to check that this is an acceptable normalization strategy, it's possible to plot richness versus abundance. The correlation of these should decrease with normalization.
+
+```{r rich vs abun}
+# First, plot raw richness and abundance - calculated earlier
+plot(rich, abun)
+
+# Now, recalculate and plot again
+norm_rich <- richness_calc(omicsData = mynorm, index = c("observed"))
+norm_abun <- abundance_calc(omicsData = mynorm)
+
+plot(norm_rich, norm_abun)
+```
+
+# Community Metrics
+
+There are a variety of other metrics that can be calculated, as well, to look at the community as a whole.
+
+## alphaDiv_calc
+
+Alpha diversity is a measure of the amount of diversity within a sample.
+
+```{r alphaDiv_calc}
+alpha <- alphaDiv_calc(omicsData = mynorm, index = c("shannon", "simpson", "invsimpson"))
+
+summary(alpha)
+plot(alpha)
+```
+
+## evenness_calc
+
+Evenness is a measure of the spread of abundances across features. If all features are seen roughly the same number of times, the evenness score will be very high. If one feature is seen very often while others are very rare, the evenness score will be low.
+
+```{r evenness_calc}
+even <- evenness_calc(omicsData = mynorm, index = c("shannon", "simpson"))
+
+summary(even)
+plot(even)
+```
+
+## richness_calc
+
+Richness can be calculated using three metrics - 'observed', which is the total number of unique features (in this example, genera), that are found in the dataset, or 'chao1' or 'ace', which are richness estimators which estimates the total number of features. Samples with a very low richness might need to be thrown out or redone.
+
+```{r richness_calc}
+rich <- richness_calc(omicsData = mynorm, index = c("observed", "chao1", "ace"))
+
+summary(rich)
+
+plot(rich)
+```
+
+## abundance_calc
+
+Abundance is the total sum of counts that appear in a sample. A sample with a very low number of counts might need to be thrown out or redone.
+
+```{r abundance_calc}
+abun <- abundance_calc(omicsData = mynorm)
+
+summary(abun)
+
+plot(abun)
+```
+
+## jaccard_calc
+
+The Jaccard index is a beta diversity measure that can look at how similar two samples are to each other. In this instance, this can be used again to look for outliers. The Jaccard index is calculated between every sample in a group and the median value (between one sample and every other sample in a group) is calculated. If a sample is an outlier, it will have a very low index value compared to the others.
+
+```{r jaccard_calc}
+jac <- jaccard_calc(omicsData = mynorm, sim = TRUE)
+
+summary(jac)
+
+plot(jac, variable = "Median")
+```
+
+## Beta Diversity
+
+There are many metrics for calculating beta diversity and quite a few of them can be found in the *vegan* package. So as to not reinvent the wheel, *vegan* is utilized here.
+
+```{r vegan}
+library(vegan)
+library(goeveg)
+
+# First, need to get pmartRseq data object into vegan data object
+myvegan <- pmartRseq_to_vegan(omicsData = mynorm)
+
+# Use goeveg package to dtermine the optimal dimensions
+goeveg::dimcheckMDS(matrix = myvegan, distance = "bray", k = 10, autotransform = FALSE)
+
+# Determine k from plot above
+vegmds <- vegan::metaMDS(comm = myvegan, distance = "bray", k = 4, autotransform = FALSE)
+
+# Plot
+pmartRseq_NMDS(res = vegmds, omicsData = mynorm, grp = "Group", k = 4)
+
+# adonis
+adonis(myvegan ~ attr(mynorm,"group_DF")$MoistureStatus[match(rownames(myvegan),attr(mynorm ,"group_DF")$SampleID)] * attr(mynorm,"group_DF")$SoilWeight[match(rownames(myvegan),attr(mynorm,"group_DF")$SampleID)], permutations=999, distance="bray")
+```
+
+# Differential Abundance
+
+Use DESeq2 and/or edgeR to calculate differential abundance between groups. This works on pairwise comparisons and it's possible to either specify the comparisons or run all of them. Need to use the non-normalized data and input normalization factors into the function.
+
+```{r diffabun}
+norm_facs <- normalize_data(omicsData = mydata, norm_fn = "css", normalize = FALSE)
+
+myda <- countSTAT(omicsData = mydata, norm_factors = norm_facs$scale_param, comparisons = "all", control = NULL, test = "dw", pval_adjust = "none", pval_thresh = 0.05)
+
+summary(myda)
+
+plot(myda, type="flag")
+plot(myda, type="logfc")
+plot(myda, type="volcano")
+
+plot_all_diffabun(countSTAT_results = myda, omicsData = mynorm)
+```
+
+# Indicator Species
+
+Use the package *indicspecies* to calculate the indicator species for a dataset. This can be done between all groups or between all groups within a subset of groups.
+
+```{r indsp}
+myis <- indsp_calc(omicsData = mynorm, within = "SoilWeight", pval_thresh = 0.05)
+
+summary(myis)
+
+plot(myis, type="flag")
+
+plot_indsp(indsp = myis, omicsData = mynorm)
+```
+
+# ALDEx2
+
+Use a modified version of the ALDEx2 package to run a model on every feature in the dataset.
+
+```{r aldex}
+
+myaldex <- pmartRseq_aldex2(omicsData = mydata, mainEffects = c("MoistureStatus", "SoilWeight"), mc.samples = 128, denom = "all", verbose = FALSE, interactions = FALSE, randomEffect = NULL, pval_thresh = 0.05)
+
+summar(myaldex)
+
+plot(myaldex, type="pvals")
+plot(myaldex, type="flag")
+```
+
+# Network Analysis
+
+Can also use this package to run a network analysis
+
+```{r network}
+# First, create a network
+mynetwork <- network_calc(omicsData = mynorm, type = "spearman", group = FALSE, group_var = NULL, fdr_method = "fndr", missing_val = 0)
+head(mynetwork)
+
+# Then, create an igraph object and plot
+myigraph <- pmartRseq_igraph(netData = mynetwork, coeff = 0.5, qval = 0.05)
+
+# Plot network using taxonomy
+network_plot(netGraph = myigraph, omicsData = mynorm, colour = "Phylum", vsize = TRUE)
+
+# Calculate netowrk indices
+myinds <- network_indices(netGraph = myigraph)
+myinds$Metrics$Other
+
+# Detect modules for network
+mymods <- detect_modules(netGraph = myigraph, cluster = "louvain", cutoff = 5)
+mymods
+
+# Correlate environmental variables to module data
+myenv <- mod_env(omicsData = mynorm, modData = mymods, envVars = c("CumulativeCO2","pH","SO4_reduction"))
+myenv$corr
+
+# Plot module/enviornmental variable correlations
+plot(myenv, pval.thresh=0.10, max.size=20)
+
+```
