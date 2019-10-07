@@ -25,7 +25,9 @@ library(pmartRseq)
 The first step in analysis is to get the data in the pmartRseq-specified data format. To do this, use *as.seqData*. You can simply input the location of the data and metadata files and the function will do the rest. You also need to input the *data_type*, which can be "rRNA", "gDNA", or "cDNA". 
 
 ```{r seqData}
-seq <- import_seqData(e_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/mead/data/OTU.biom", f_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/mead/data/QIIMEvalid_metadata_20160623_nohash.txt")
+seq <- import_seqData(e_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/edata_16s.csv", 
+                      e_meta_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/emeta_16s.csv",
+                      f_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/fdata_16s.csv")
 
 mydata <- as.seqData(e_data = seq$e_data, f_data = seq$f_data, e_meta = seq$e_meta, edata_cname = seq$guessed_edata_cname, fdata_cname = seq$guessed_fdata_cname, taxa_cname = seq$guessed_taxa_cname, data_type = "rRNA")
 ```
@@ -41,15 +43,9 @@ summary(mydata)
 It's important to define the groups that these samples comprise. Up to two main effects can be used in this.
 
 ```{r group_designation}
-mydata <- group_designation(omicsData = mydata, main_effects = c("MoistureStatus", "SoilWeight"))
+mydata <- group_designation(omicsData = mydata, main_effects = c("Section"))
 
 head(attr(mydata, "group_DF"))
-```
-
-Use the *plot* function to look at the distribution of taxa across the groups.
-
-```{r data plot}
-plot(mydata, class="taxonomy2")
 ```
 
 # split_emeta
@@ -59,21 +55,15 @@ It might be a good idea to use the *split_emeta* function to format the experime
 ```{r split_emeta}
 head(mydata$e_meta)
 
-mydata <- split_emeta(omicsData = mydata, cname = "OTU", split1 = NULL, numcol = 7, split2 = "__", num = 2, newnames = NULL)
+mydata <- split_emeta(omicsData = mydata, cname = "taxonomy", split1 = ",", numcol = 7, split2 = "__", num = 2, newnames = NULL)
 
 head(mydata$e_meta)
 ```
 
-# taxa_rollup
+Use the *plot* function to look at the distribution of taxa across the groups.
 
-If desired, use *taxa_rollup*, to use the data at a different taxonomic level. For instance, on the "Genus", instead of "OTU", level.
-
-```{r taxa_rollup}
-mydata <- taxa_rollup(omicsData = mydata, level = "Genus", taxa_levels = NULL)
-
-summary(mydata)
-
-head(mydata$e_meta)
+```{r data plot}
+plot(mydata, class="Phylum")
 ```
 
 # applyFilt
@@ -83,7 +73,7 @@ It's possible to want a filter applied to the data and there are many options he
 ```{r filt}
 myfilt <- count_based_filter(omicsData = mydata, fn = "sum")
 plot(myfilt, min_num = 0)
-summary(myfilt, min_num = 0) # If no features will be removed with this, then do not run the next function.
+summary(myfilt, min_num = 0)
 
 mydata <- applyFilt(filter_object = myfilt, omicsData = mydata, upper_lim = 0)
 ```
@@ -225,16 +215,16 @@ library(goeveg)
 myvegan <- pmartRseq_to_vegan(omicsData = mynorm)
 
 # Use goeveg package to dtermine the optimal dimensions
-goeveg::dimcheckMDS(matrix = myvegan, distance = "bray", k = 10, autotransform = FALSE)
+#goeveg::dimcheckMDS(matrix = myvegan, distance = "bray", k = 10, autotransform = FALSE)
 
 # Determine k from plot above
-vegmds <- vegan::metaMDS(comm = myvegan, distance = "bray", k = 4, autotransform = FALSE)
+vegmds <- vegan::metaMDS(comm = myvegan, distance = "bray", k = 2, autotransform = FALSE)
 
 # Plot
-pmartRseq_NMDS(res = vegmds, omicsData = mynorm, grp = "Group", k = 4)
+pmartRseq_NMDS(res = vegmds, omicsData = mynorm, grp = "Group", k = 2)
 
 # adonis
-adonis(myvegan ~ attr(mynorm,"group_DF")$MoistureStatus[match(rownames(myvegan),attr(mynorm ,"group_DF")$SampleID)] * attr(mynorm,"group_DF")$SoilWeight[match(rownames(myvegan),attr(mynorm,"group_DF")$SampleID)], permutations=999, distance="bray")
+adonis(myvegan ~ attr(mynorm,"group_DF")$Group[match(rownames(myvegan),attr(mynorm ,"group_DF")$Sample.Name)], permutations=999, distance="bray")
 ```
 
 # Differential Abundance
@@ -260,27 +250,13 @@ plot_all_diffabun(countSTAT_results = myda, omicsData = mynorm)
 Use the package *indicspecies* to calculate the indicator species for a dataset. This can be done between all groups or between all groups within a subset of groups.
 
 ```{r indsp}
-myis <- indsp_calc(omicsData = mynorm, within = "SoilWeight", pval_thresh = 0.05)
+myis <- indsp_calc(omicsData = mynorm, within = NULL, pval_thresh = 0.05)
 
 summary(myis)
 
 plot(myis, type="flag")
 
 plot_indsp(indsp = myis, omicsData = mynorm)
-```
-
-# ALDEx2
-
-Use a modified version of the ALDEx2 package to run a model on every feature in the dataset.
-
-```{r aldex}
-
-myaldex <- pmartRseq_aldex2(omicsData = mydata, mainEffects = c("MoistureStatus", "SoilWeight"), mc.samples = 128, denom = "all", verbose = FALSE, interactions = FALSE, randomEffect = NULL, pval_thresh = 0.05)
-
-summar(myaldex)
-
-plot(myaldex, type="pvals")
-plot(myaldex, type="flag")
 ```
 
 # Network Analysis
@@ -307,7 +283,7 @@ mymods <- detect_modules(netGraph = myigraph, cluster = "louvain", cutoff = 5)
 mymods
 
 # Correlate environmental variables to module data
-myenv <- mod_env(omicsData = mynorm, modData = mymods, envVars = c("CumulativeCO2","pH","SO4_reduction"))
+myenv <- mod_env(omicsData = mynorm, modData = mymods, envVars = c("BG","BX","CB","AP","NAG","AAP"))
 myenv$corr
 
 # Plot module/enviornmental variable correlations
