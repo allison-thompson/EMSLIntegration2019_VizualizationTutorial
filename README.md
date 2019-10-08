@@ -27,6 +27,9 @@ Please follow the instructions in [this document](Software_Requirements_2019.pdf
 ### Proteomics, Metabolomics, and/or Lipidomics (LC-/GC-MS)
 * <a href="Quality_Control_with_pmartR.Rmd" download> Quality\_Control\_with\_pmartR.Rmd </a>
 
+### PSpecteR Manual
+* [PSpecteR Manual] (http://htmlpreview.github.io/?https://github.com/allison-thompson/EMSLIntegration2019_VizualizationTutorial/blob/master/PSpecteR_Manual_v.2019.10.07.html)
+
 ## Workshop Data
 
 ### Amplicon Sequencing
