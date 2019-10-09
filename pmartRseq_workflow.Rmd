@@ -9,7 +9,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 ```
 
 # pmartRseq
@@ -25,16 +25,20 @@ library(pmartRseq)
 The first step in analysis is to get the data in the pmartRseq-specified data format. To do this, use *as.seqData*. You can simply input the location of the data and metadata files and the function will do the rest. You also need to input the *data_type*, which can be "rRNA", "gDNA", or "cDNA". 
 
 ```{r seqData}
+# use import_seqData to import each file
+# it is also possible to import separately and then format for the next function
 seq <- import_seqData(e_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/edata_16s.csv", 
                       e_meta_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/emeta_16s.csv",
                       f_data_filepath = "C:/Users/thom040/OneDrive - PNNL/Documents/GitRepositories/EMSLIntegration2019_VisualizationTutorial/fdata_16s.csv")
 
+# create seqData object
 mydata <- as.seqData(e_data = seq$e_data, f_data = seq$f_data, e_meta = seq$e_meta, edata_cname = seq$guessed_edata_cname, fdata_cname = seq$guessed_fdata_cname, taxa_cname = seq$guessed_taxa_cname, data_type = "rRNA")
 ```
 
 Use the *summary* function to get a summary of your data - how much data is missing, the number of samples, etc.
 
 ```{r data summary}
+# summary functions are specific to data class
 summary(mydata)
 ```
 
@@ -43,26 +47,32 @@ summary(mydata)
 It's important to define the groups that these samples comprise. Up to two main effects can be used in this.
 
 ```{r group_designation}
+# grouping samples as replicates helps us visualize differences in groups
 mydata <- group_designation(omicsData = mydata, main_effects = c("Section"))
 
+# here, observe the newly created data frame, as an attribute of the data
 head(attr(mydata, "group_DF"))
 ```
 
 # split_emeta
 
-It might be a good idea to use the *split_emeta* function to format the experimental metadata. For instance, this will remove the "k__" part of "k__Bacteria" in a taxonomic breakdown. First, you can use *head(mydata$e_meta)* if you want to see if this is necessary.
+It might be a good idea to use the *split_emeta* function to format the experimental metadata. For instance, this will remove the "k__" part of "k__Bacteria" in a taxonomic breakdown. Additionally, it can split one taxonomy column into separate levels - e.g., 'k__Bacteria,p__Proteobacteria,c__Betaproteobacteria' would transform into three separate columns, one for each 'Bacteria', 'Proteobacteria', and 'Betaproteobacteria'. First, you can use *head(mydata$e_meta)* if you want to see if this is necessary.
 
 ```{r split_emeta}
+# before splitting
 head(mydata$e_meta)
 
+# splits one taxonomic column into multiple columns for each level
 mydata <- split_emeta(omicsData = mydata, cname = "taxonomy", split1 = ",", numcol = 7, split2 = "__", num = 2, newnames = NULL)
 
+# after splitting
 head(mydata$e_meta)
 ```
 
-Use the *plot* function to look at the distribution of taxa across the groups.
+Use the *plot* function to look at the distribution of taxa across the groups.Change the "class" parameter to look at the distribution of different taxonomic levels.
 
 ```{r data plot}
+# plot data to observe taxonomic distributions across groups
 plot(mydata, class="Phylum")
 ```
 
@@ -70,12 +80,25 @@ plot(mydata, class="Phylum")
 
 It's possible to want a filter applied to the data and there are many options here. Generally, it's normal to remove features that have a count of 0 across all samples (example below). It's also possible to remove features that are only seen once in one sample. 
 
-```{r filt}
-myfilt <- count_based_filter(omicsData = mydata, fn = "sum")
-plot(myfilt, min_num = 0)
-summary(myfilt, min_num = 0)
+```{r count filt}
+# count number of samples each OTU is seen in
+mycounts <- count_based_filter(omicsData = mydata, fn = "sum")
+plot(mycounts, min_num = 0)
+summary(mycounts, min_num = 0)
 
-mydata <- applyFilt(filter_object = myfilt, omicsData = mydata, upper_lim = 0)
+# remove things seen in 0 samples
+mydata <- applyFilt(filter_object = mycounts, omicsData = mydata, upper_lim = 0)
+```
+
+There are also other possible filters. For example, a taxonomic filter can be used to remove certain taxa. For instance, it might be beneficial to remove all OTUs labeled as Eukaryotes, as those are likely mis-classified or contaminants. Another possibility is to remove OTUs that are not assigned even at the Kingdom level.
+
+```{r emeta filt}
+# extract taxonomy for each OTU
+mytaxa <- metadata_based_filter(omicsData = mydata, criteria = "Kingdom")
+table(mytaxa$Kingdom)
+
+# remove taxa that are not Archaea or Bacteria
+mydata <- applyFilt(filter_object = mytaxa, omicsData = mydata, keep_taxa = c("Archaea","Bacteria"))
 ```
 
 # Outliers
@@ -87,10 +110,9 @@ Use *richness_calc*, *abundance_calc*, and *jaccard_calc* to look for any outlie
 Richness can be calculated using three metrics - 'observed', which is the total number of unique features (in this example, genera), that are found in the dataset, or 'chao1' or 'ace', which are richness estimators which estimates the total number of features. Samples with a very low richness might need to be thrown out or redone.
 
 ```{r richness_calc}
-rich <- richness_calc(omicsData = mydata, index = c("observed", "chao1", "ace"))
-
+# calculate observed richness and chao1 richness estimator
+rich <- richness_calc(omicsData = mydata, index = c("observed", "chao1"))
 summary(rich)
-
 plot(rich)
 ```
 
@@ -99,10 +121,9 @@ plot(rich)
 Abundance is the total sum of counts that appear in a sample. A sample with a very low number of counts might need to be thrown out or redone.
 
 ```{r abundance_calc}
+# calculate non-normalized abundance
 abun <- abundance_calc(omicsData = mydata)
-
 summary(abun)
-
 plot(abun)
 ```
 
@@ -111,10 +132,9 @@ plot(abun)
 The Jaccard index is a beta diversity measure that can look at how similar two samples are to each other. In this instance, this can be used again to look for outliers. The Jaccard index is calculated between every sample in a group and the median value (between one sample and every other sample in a group) is calculated. If a sample is an outlier, it will have a very low index value compared to the others.
 
 ```{r jaccard_calc}
+# calculate jaccard similarity index between every sample within each group
 jac <- jaccard_calc(omicsData = mydata, sim = TRUE)
-
 summary(jac)
-
 plot(jac, variable = "Median")
 ```
 
@@ -123,8 +143,10 @@ plot(jac, variable = "Median")
 If it looks like all samples are good to go, the next step is to normalize the data. There are multiple normalization functions available, see *?normalize_data* to view all of the options.
 
 ```{r normalize_data}
+# normalize the data
 mynorm <- normalize_data(omicsData = mydata, norm_fn = "css", normalize = TRUE)
 
+# plot normalized taxa distribution
 plot(mynorm, class="Phylum")
 ```
 
@@ -134,10 +156,9 @@ In order to check that this is an acceptable normalization strategy, it's possib
 # First, plot raw richness and abundance - calculated earlier
 plot(rich, abun)
 
-# Now, recalculate and plot again
+# Now, recalculate and plot again to compare
 norm_rich <- richness_calc(omicsData = mynorm, index = c("observed"))
 norm_abun <- abundance_calc(omicsData = mynorm)
-
 plot(norm_rich, norm_abun)
 ```
 
@@ -147,11 +168,11 @@ There are a variety of other metrics that can be calculated, as well, to look at
 
 ## alphaDiv_calc
 
-Alpha diversity is a measure of the amount of diversity within a sample.
+Alpha diversity is a measure of the amount of diversity within a sample. There are multiple possible indices to use. Here, we'll calculate Shannon's, Simpson's, and Inverse Simpsons' diveristy indices.
 
 ```{r alphaDiv_calc}
+# calculate shannon, simpson, inverse simpson diversity indices
 alpha <- alphaDiv_calc(omicsData = mynorm, index = c("shannon", "simpson", "invsimpson"))
-
 summary(alpha)
 plot(alpha)
 ```
@@ -161,21 +182,22 @@ plot(alpha)
 Evenness is a measure of the spread of abundances across features. If all features are seen roughly the same number of times, the evenness score will be very high. If one feature is seen very often while others are very rare, the evenness score will be low.
 
 ```{r evenness_calc}
+# calculate shannon and simpson evenness
 even <- evenness_calc(omicsData = mynorm, index = c("shannon", "simpson"))
-
 summary(even)
 plot(even)
 ```
 
 ## richness_calc
 
-Richness can be calculated using three metrics - 'observed', which is the total number of unique features (in this example, genera), that are found in the dataset, or 'chao1' or 'ace', which are richness estimators which estimates the total number of features. Samples with a very low richness might need to be thrown out or redone.
+Richness can be calculated using three metrics - 'observed', which is the total number of unique features (in this example, genera), that are found in the dataset, or 'chao1', which is a richness estimator which estimates the total number of features. Samples with a very low richness might need to be thrown out or redone.
 
-```{r richness_calc}
-rich <- richness_calc(omicsData = mynorm, index = c("observed", "chao1", "ace"))
-
+```{r normalized richness_calc}
+# recalculate richness
+# NOTE for richness estimators, like chao1 or ace, must use non-normalized data
+# as these equations depend on singletons
+rich <- richness_calc(omicsData = mynorm, index = c("observed", "chao1"))
 summary(rich)
-
 plot(rich)
 ```
 
@@ -183,11 +205,10 @@ plot(rich)
 
 Abundance is the total sum of counts that appear in a sample. A sample with a very low number of counts might need to be thrown out or redone.
 
-```{r abundance_calc}
+```{r normalized abundance_calc}
+# calculate new, normalized abundances
 abun <- abundance_calc(omicsData = mynorm)
-
 summary(abun)
-
 plot(abun)
 ```
 
@@ -195,11 +216,10 @@ plot(abun)
 
 The Jaccard index is a beta diversity measure that can look at how similar two samples are to each other. In this instance, this can be used again to look for outliers. The Jaccard index is calculated between every sample in a group and the median value (between one sample and every other sample in a group) is calculated. If a sample is an outlier, it will have a very low index value compared to the others.
 
-```{r jaccard_calc}
+```{r normalized jaccard_calc}
+# calculate jaccard similarity index between each sample within a group for each group
 jac <- jaccard_calc(omicsData = mynorm, sim = TRUE)
-
 summary(jac)
-
 plot(jac, variable = "Median")
 ```
 
@@ -232,12 +252,13 @@ adonis(myvegan ~ attr(mynorm,"group_DF")$Group[match(rownames(myvegan),attr(myno
 Use DESeq2 and/or edgeR to calculate differential abundance between groups. This works on pairwise comparisons and it's possible to either specify the comparisons or run all of them. Need to use the non-normalized data and input normalization factors into the function.
 
 ```{r diffabun}
+# calculate normalization factors for import to DESeq2
 norm_facs <- normalize_data(omicsData = mydata, norm_fn = "css", normalize = FALSE)
 
+# run DESeq2 differential abundance test between every pair of groups
 myda <- countSTAT(omicsData = mydata, norm_factors = norm_facs$scale_param, comparisons = "all", control = NULL, test = "dw", pval_adjust = "none", pval_thresh = 0.05)
 
 summary(myda)
-
 plot(myda, type="flag")
 plot(myda, type="logfc")
 plot(myda, type="volcano")
@@ -250,10 +271,9 @@ plot_all_diffabun(countSTAT_results = myda, omicsData = mynorm)
 Use the package *indicspecies* to calculate the indicator species for a dataset. This can be done between all groups or between all groups within a subset of groups.
 
 ```{r indsp}
+# calculate indicator species
 myis <- indsp_calc(omicsData = mynorm, within = NULL, pval_thresh = 0.05)
-
 summary(myis)
-
 plot(myis, type="flag")
 
 plot_indsp(indsp = myis, omicsData = mynorm)
@@ -269,18 +289,19 @@ mynetwork <- network_calc(omicsData = mynorm, type = "spearman", group = FALSE, 
 head(mynetwork)
 
 # Then, create an igraph object and plot
-myigraph <- pmartRseq_igraph(netData = mynetwork, coeff = 0.5, qval = 0.05)
+myigraph <- pmartRseq_igraph(netData = mynetwork, coeff = 0.5, qval = 0.025)
 
 # Plot network using taxonomy
 network_plot(netGraph = myigraph, omicsData = mynorm, colour = "Phylum", vsize = TRUE)
 
 # Calculate netowrk indices
 myinds <- network_indices(netGraph = myigraph)
-myinds$Metrics$Other
+myinds$Metrics$Other$Transitivity
+myinds$Metrics$Other$MeanDistance
 
 # Detect modules for network
 mymods <- detect_modules(netGraph = myigraph, cluster = "louvain", cutoff = 5)
-mymods
+table(mymods$Module)
 
 # Correlate environmental variables to module data
 myenv <- mod_env(omicsData = mynorm, modData = mymods, envVars = c("BG","BX","CB","AP","NAG","AAP"))
