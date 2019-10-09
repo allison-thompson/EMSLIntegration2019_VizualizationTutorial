@@ -22,10 +22,10 @@ Please follow the instructions in [this document](Software_Requirements_2019.pdf
 * <a href="pmartRseq_workflow.Rmd" download> pmartRseq\_workflow.Rmd </a>
 
 ### Fourier Transform Mass Spectrometry
-* <a href="ftmsRanalysis.Rmd" download> ftmsRanalysis.Rmd </a>
+* <a href="ftmsRanalysis.Rmd" download> ftmsRanalysis.Rmd </a> <a href="https://emsl-computing.github.io/ftmsRanalysis/articles/ftmsRanalysis.html"> [webpage] </a>
 
 ### Proteomics, Metabolomics, and/or Lipidomics (LC-/GC-MS)
-* <a href="Quality_Control_with_pmartR.Rmd" download> Quality\_Control\_with\_pmartR.Rmd </a>
+* <a href="Quality_Control_with_pmartR.Rmd" download> Quality\_Control\_with\_pmartR.Rmd </a> <a href = "https://pmartr.github.io/pmartR/articles/Quality_Control_with_pmartR.html"> [webpage] </a>
 
 ### PSpecteR Manual
 * https://htmlpreview.github.io/?https://github.com/allison-thompson/EMSLIntegration2019_VizualizationTutorial/blob/master/PSpecteR_Manual_v.2019.10.07.html
