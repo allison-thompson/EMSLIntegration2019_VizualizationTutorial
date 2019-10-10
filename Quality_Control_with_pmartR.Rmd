@@ -3,6 +3,7 @@ title: "Quality Control and Normalization of Peptide Data with the `pmartR` Pack
 author: "Kelly Stratton, Rachel Richardson, Lisa Bramer"
 date: "`r Sys.Date()`"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
   rmarkdown::html_vignette:
@@ -175,6 +176,8 @@ mypepData <- as.pepData(e_data = pep_edata,
 
 class(mypepData)     ## pmartR class of data object
 summary(mypepData)   ## pmartR summary of data object
+
+
 ```
 
 ```{r pepdata2, echo=FALSE}
@@ -243,7 +246,7 @@ pander(head(pmartR::custom_sampnames(mypepData, firstn = 3)$f_data))
 Once the pepData object is created, a typical QC workflow follows the figure below. 
 
 
-```{r workflowFig, out.width = "600px", echo=FALSE, fig.cap = "Figure 1. Quality control and processing workflow in pmartR package."}
+```{r workflowFig, out.width = "450px", echo=FALSE}
 knitr::include_graphics("Process Flow Graphic3.png")
 ```
 
@@ -810,20 +813,6 @@ proteoforms <- bpquant(peptideStats, norm_object)
 proteoforms[[49]] ## An example of an output element
 
 ```
-```{r echo=FALSE, eval=FALSE, include=FALSE}
-## Update emeta of pepData
-### Generate proteoform df
-proteoforms_emeta <- dplyr::bind_rows(proteoforms)
-
-### Adjust for class differences
-norm_data$e_meta$Protein <- as.character(norm_data$e_meta$Protein)
-norm_data$e_meta$Mass_Tag_ID <- as.character(norm_data$e_meta$Mass_Tag_ID)
-
-### Join data
-norm_object2 <- dplyr::left_join(norm_data$e_meta, proteoforms_emeta)
-tidyr::unite(norm_object2, "Protein", "Protein", "proteoformID")
-
-```
 
 -----
 
@@ -860,6 +849,10 @@ print(myprodata_rrollup)
 plot(myprodata_rrollup, bw_theme = TRUE)
 rm(myprodata_rrollup)
 
+myprodata_rrollup<- pmartR::protein_quant(pepData = norm_object, method = "rrollup", isoformRes = proteoforms)
+print(myprodata_rrollup)
+plot(myprodata_rrollup, bw_theme = TRUE)
+rm(myprodata_rrollup)
 
 
 ```
